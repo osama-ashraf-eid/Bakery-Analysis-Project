@@ -12,17 +12,31 @@ st.set_page_config(page_title="Bakery Performance Dashboard 🍞", layout="wide"
 
 st.title("🥖 Bakery Performance Analytics Dashboard")
 st.image(
-    "https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrZXJ5JTIwcHJvZHVjdHN8ZW58MHx8MHx8fDA%3D&lib=rb-4.1.0&q=60&w=2000",
+    "https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrc2Vy/products&lib=rb-4.1.0&q=60&w=2000",
     use_container_width=True,
     caption="Bakery Operations & Sales Insights",
 )
 st.markdown("---")
 
 # --------------------------------
-# DATA LOADING AND SIDEBAR FILTERS (DYNAMIC)
+# SIDEBAR SETUP (PAGES FIRST)
 # --------------------------------
 st.sidebar.header("🔍 Filters")
 
+# --------------------------------
+# 1. DASHBOARD PAGE NAVIGATION (MOVED TO TOP OF SIDEBAR)
+# --------------------------------
+st.sidebar.markdown("#### Select Analysis Page")
+page_selection = st.sidebar.radio(
+    " ", # Empty label for cleaner appearance
+    ("🏠 Overview & Key Performance Indicators (KPIs)", "📈 Trends & Performance", "💸 In-Depth Financial Analysis", "📊 Relationships & Comparisons")
+)
+st.sidebar.markdown("---")
+
+
+# --------------------------------
+# 2. DATA LOADING AND FILTERS
+# --------------------------------
 uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file:
@@ -63,7 +77,6 @@ if uploaded_file:
         # Order days of the week for visualization
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         if 'Day' in df.columns:
-            # Ensure day column exists before attempting to categorize
             if df['Day'].dtype != 'category':
                 df['Day'] = pd.Categorical(df['Day'], categories=day_order, ordered=True)
 
@@ -75,8 +88,10 @@ if uploaded_file:
         st.error("❌ Could not load data or 'Date' column is missing/invalid.")
         st.stop()
     
+    st.sidebar.markdown("#### Categorical Filters")
+    
     # ----------------------
-    # Sidebar Filters (All unique values are included)
+    # Sidebar Filters (All unique values are included by default)
     # ----------------------
     filters = {}
     if "Channel" in df.columns: filters["Channel"] = st.sidebar.multiselect("Select Channel(s):", options=sorted(df["Channel"].dropna().unique()), default=sorted(df["Channel"].dropna().unique()))
@@ -87,10 +102,7 @@ if uploaded_file:
     if "Time of Day" in df.columns: filters["Time of Day"] = st.sidebar.multiselect("Select Time(s) of Day:", options=sorted(df["Time of Day"].dropna().unique()), default=sorted(df["Time of Day"].dropna().unique()))
     if "Customer Type" in df.columns: filters["Customer Type"] = st.sidebar.multiselect("Select Customer Type(s):", options=sorted(df["Customer Type"].dropna().unique()), default=sorted(df["Customer Type"].dropna().unique()))
 
-    min_rev, max_rev, min_profit, max_profit = 0, 0, 0, 0
-    if "Revenue" in df.columns and "Profit" in df.columns:
-        min_rev, max_rev = st.sidebar.slider("Revenue Range ($):", float(df["Revenue"].min()), float(df["Revenue"].max()), (float(df["Revenue"].min()), float(df["Revenue"].max())))
-        min_profit, max_profit = st.sidebar.slider("Profit Range ($):", float(df["Profit"].min()), float(df["Profit"].max()), (float(df["Profit"].min()), float(df["Profit"].max())))
+    # NOTE: Revenue and Profit Range Sliders have been removed as requested.
 
     # ----------------------
     # Apply Filtering
@@ -100,11 +112,7 @@ if uploaded_file:
         if val and key in filtered_df.columns:
             filtered_df = filtered_df[filtered_df[key].isin(val)]
 
-    if "Revenue" in filtered_df.columns and "Profit" in filtered_df.columns:
-        filtered_df = filtered_df[
-            (filtered_df["Revenue"].between(min_rev, max_rev)) &
-            (filtered_df["Profit"].between(min_profit, max_profit))
-        ]
+    # NOTE: The range filtering logic has been removed as requested.
         
     if filtered_df.empty:
         st.warning("⚠️ No data matches the selected filters. Please adjust your selections.")
@@ -112,25 +120,15 @@ if uploaded_file:
 
 
     # --------------------------------
-    # DASHBOARD PAGE NAVIGATION (using Radio)
-    # --------------------------------
-    st.sidebar.markdown("---")
-    page_selection = st.sidebar.radio(
-        "Select Analysis Page:",
-        ("🏠 Overview & Key Performance Indicators (KPIs)", "📈 Trends & Performance", "💸 In-Depth Financial Analysis", "📊 Relationships & Comparisons")
-    )
-    st.sidebar.markdown("---")
-
-    st.markdown("### 🔍 Filtered Data Sample")
-    st.dataframe(filtered_df.head())
-    st.markdown("---")
-
-    # --------------------------------
     # KPI CARD FUNCTION
     # --------------------------------
     def kpi_card(label, value, is_currency=True, color='blue', help_text=""):
         formatted_value = f"${value:,.2f}" if is_currency else f"{value:,.0f}"
         st.metric(label=label, value=formatted_value, help=help_text)
+
+    st.markdown("### 🔍 Filtered Data Sample")
+    st.dataframe(filtered_df.head())
+    st.markdown("---")
 
     # --------------------------------
     # PAGE 1: OVERVIEW & KPIS
