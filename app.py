@@ -207,7 +207,16 @@ if uploaded_file:
             fig2 = px.bar(filtered_df, x="Time of Day", y="Profit", color="Channel", title="Profit by Time of Day")
             st.plotly_chart(fig2, use_container_width=True)
 
-   
+    # ------------------------------
+    # TAB 7 — REGIONAL
+    # ------------------------------
+    with tab7:
+        if "Region" in filtered_df.columns:
+            st.subheader("Geographic Revenue / Profit View")
+            fig_map = px.bar(filtered_df.groupby("Region")[["Revenue", "Profit"]].sum().reset_index(), x="Region", y=["Revenue", "Profit"], barmode="group", title="Performance by Region")
+            st.plotly_chart(fig_map, use_container_width=True)
+        else:
+            st.info("🌍 Region data not available in your dataset.")
 
 else:
     st.info("📤 Please upload a dataset to begin.")
