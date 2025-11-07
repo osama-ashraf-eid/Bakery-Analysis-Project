@@ -1,138 +1,196 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# ------------------ Page Setup ------------------
-st.set_page_config(page_title="Bakery Sales Dashboard", layout="wide")
+st.set_page_config(page_title="Bakery Performance Dashboard 🍞", layout="wide")
 
-# ------------------ Header ------------------
-st.title("🥐 Bakery Sales & Marketing Dashboard")
-st.image("https://i.pinimg.com/originals/2a/45/18/2a45189ec8766a4604178eb41b059cb1.jpg", use_container_width=True)
-st.markdown("### Gain insights into sales, revenue, profit, and marketing performance")
+# ------------------------------
+# Header & Image Banner
+# ------------------------------
+st.title("🥖 Bakery Performance Analytics Dashboard")
+st.image(
+    "https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrZXJ5JTIwcHJvZHVjdHN8ZW58MHx8MHx8fDA%3D&ixlib=rb-4.1.0&q=60&w=2000",
+    use_container_width=True,
+    caption="Bakery Operations & Sales Insights",
+)
 
-# ------------------ File Upload ------------------
-uploaded_file = st.file_uploader("Upload your dataset (CSV or Excel)", type=["csv", "xlsx"])
+st.markdown("---")
+
+# ------------------------------
+# Load Data
+# ------------------------------
+st.sidebar.header("🔍 Filters")
+
+uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file:
-    # Load data
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
-    except Exception as e:
-        st.error(f"Error loading file: {e}")
-        st.stop()
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
 
     # Clean columns
-    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+    df.columns = df.columns.str.strip()
 
-    # Detect columns automatically
-    def find_col(possible_names):
-        for name in possible_names:
-            for col in df.columns:
-                if name in col:
-                    return col
-        return None
+    # Ensure Date column
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Month"] = df["Date"].dt.month_name()
+        df["Day"] = df["Date"].dt.day_name()
+    else:
+        st.error("❌ Column 'Date' not found.")
+        st.stop()
 
-    sales_col = find_col(["sales", "amount", "revenue"])
-    profit_col = find_col(["profit", "margin"])
-    revenue_col = find_col(["revenue", "income"])
-    ad_col = find_col(["ad", "marketing", "spend", "cost"])
-    conversion_col = find_col(["conversion", "order", "purchase"])
-    category_col = find_col(["category", "type", "group"])
-    product_col = find_col(["product", "item", "name"])
-    date_col = find_col(["date", "time"])
+    # Profit calculation
+    if "Revenue" in df.columns and "Ad Spend" in df.columns:
+        df["Profit"] = df["Revenue"] - df["Ad Spend"]
 
-    if date_col:
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        df["month"] = df[date_col].dt.month_name()
-        df["day"] = df[date_col].dt.day_name()
+    # --- Sidebar Filters ---
+    channels = st.sidebar.multiselect("Select Channel(s):", sorted(df["Channel"].dropna().unique())) if "Channel" in df.columns else []
+    services = st.sidebar.multiselect("Select Service Type(s):", sorted(df["Service Type"].dropna().unique())) if "Service Type" in df.columns else []
+    months = st.sidebar.multiselect("Select Month(s):", sorted(df["Month"].dropna().unique()))
+    days = st.sidebar.multiselect("Select Day(s):", sorted(df["Day"].dropna().unique()))
+    seasons = st.sidebar.multiselect("Select Season(s):", sorted(df["Season"].dropna().unique())) if "Season" in df.columns else []
+    times = st.sidebar.multiselect("Select Time(s) of Day:", sorted(df["Time of Day"].dropna().unique())) if "Time of Day" in df.columns else []
 
-    # Sidebar Filters
-    st.sidebar.header("Filters")
-    month_filter = st.sidebar.multiselect("Select Month(s)", df["month"].dropna().unique() if "month" in df else [])
-    day_filter = st.sidebar.multiselect("Select Day(s)", df["day"].dropna().unique() if "day" in df else [])
+    # Range filters
+    min_rev, max_rev = st.sidebar.slider("Revenue Range ($):", float(df["Revenue"].min()), float(df["Revenue"].max()), (float(df["Revenue"].min()), float(df["Revenue"].max())))
+    min_profit, max_profit = st.sidebar.slider("Profit Range ($):", float(df["Profit"].min()), float(df["Profit"].max()), (float(df["Profit"].min()), float(df["Profit"].max())))
 
-    if "month" in df and month_filter:
-        df = df[df["month"].isin(month_filter)]
-    if "day" in df and day_filter:
-        df = df[df["day"].isin(day_filter)]
+    # Filter data
+    filtered_df = df.copy()
+    if channels:
+        filtered_df = filtered_df[filtered_df["Channel"].isin(channels)]
+    if services:
+        filtered_df = filtered_df[filtered_df["Service Type"].isin(services)]
+    if months:
+        filtered_df = filtered_df[filtered_df["Month"].isin(months)]
+    if days:
+        filtered_df = filtered_df[filtered_df["Day"].isin(days)]
+    if seasons:
+        filtered_df = filtered_df[filtered_df["Season"].isin(seasons)]
+    if times:
+        filtered_df = filtered_df[filtered_df["Time of Day"].isin(times)]
+    filtered_df = filtered_df[(filtered_df["Revenue"].between(min_rev, max_rev)) & (filtered_df["Profit"].between(min_profit, max_profit))]
 
-    # KPIs
-    total_sales = df[sales_col].sum() if sales_col else 0
-    total_profit = df[profit_col].sum() if profit_col else 0
-    total_revenue = df[revenue_col].sum() if revenue_col else total_sales
-    total_conversions = df[conversion_col].sum() if conversion_col else 0
+    st.markdown("### 📊 Data Overview")
+    st.dataframe(filtered_df.head())
 
-    st.markdown("### 📊 Key Metrics")
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("💰 Total Sales", f"${total_sales:,.0f}")
-    k2.metric("🏦 Total Revenue", f"${total_revenue:,.0f}")
-    k3.metric("📈 Total Profit", f"${total_profit:,.0f}")
-    k4.metric("🎯 Total Conversions", f"{total_conversions:,.0f}")
+    # ------------------------------
+    # Tabs
+    # ------------------------------
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🏠 Overview", "💵 Revenue & Profit", "📈 Trends", "📊 Relationships", "🌍 Regional Insights"
+    ])
 
-    st.markdown("<hr>", unsafe_allow_html=True)
+    # ------------------------------
+    # TAB 1 — OVERVIEW
+    # ------------------------------
+    with tab1:
+        st.subheader("Business KPIs")
 
-    # ------------------ Visualizations ------------------
-    st.subheader("📈 Visual Insights")
+        total_rev = filtered_df["Revenue"].sum()
+        total_profit = filtered_df["Profit"].sum()
+        total_spend = filtered_df["Ad Spend"].sum()
+        avg_roas = (filtered_df["Revenue"] / filtered_df["Ad Spend"]).mean() if "Ad Spend" in filtered_df.columns else 0
+        avg_conv = filtered_df["Conversions"].mean() if "Conversions" in filtered_df.columns else 0
 
-    # 1️⃣ Sales Trend
-    if date_col and sales_col:
-        fig_sales = px.line(df, x=date_col, y=sales_col, title="Sales Trend Over Time")
-        st.plotly_chart(fig_sales, use_container_width=True)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Total Revenue", f"${total_rev:,.0f}")
+        c2.metric("Total Profit", f"${total_profit:,.0f}")
+        c3.metric("Total Ad Spend", f"${total_spend:,.0f}")
+        c4.metric("Avg ROAS", f"{avg_roas:.2f}x")
+        c5.metric("Avg Conversions", f"{avg_conv:.0f}")
 
-    # 2️⃣ Profit by Month
-    if profit_col and "month" in df:
-        fig_profit = px.bar(df.groupby("month")[profit_col].sum().reset_index(),
-                            x="month", y=profit_col, title="Profit by Month", color=profit_col)
-        st.plotly_chart(fig_profit, use_container_width=True)
+        st.markdown("#### Revenue vs Profit by Channel")
+        if "Channel" in filtered_df.columns:
+            summary = filtered_df.groupby("Channel")[["Revenue", "Profit"]].sum().reset_index().sort_values("Revenue", ascending=False)
+            fig = px.bar(summary, x="Channel", y=["Revenue", "Profit"], barmode="group", title="Revenue vs Profit by Channel")
+            st.plotly_chart(fig, use_container_width=True)
 
-    # 3️⃣ Revenue by Category
-    if category_col and revenue_col:
-        fig_cat = px.bar(df.groupby(category_col)[revenue_col].sum().reset_index(),
-                         x=category_col, y=revenue_col, color=category_col, title="Revenue by Category")
-        st.plotly_chart(fig_cat, use_container_width=True)
+    # ------------------------------
+    # TAB 2 — Revenue & Profit Visuals
+    # ------------------------------
+    with tab2:
+        st.subheader("Revenue & Profit Insights")
 
-    # 4️⃣ Top Products by Sales
-    if product_col and sales_col:
-        top_prod = df.groupby(product_col)[sales_col].sum().nlargest(10).reset_index()
-        fig_top = px.bar(top_prod, x=product_col, y=sales_col,
-                         title="Top 10 Products by Sales", color=sales_col)
-        st.plotly_chart(fig_top, use_container_width=True)
+        col1, col2 = st.columns(2)
 
-    # 5️⃣ Ad Spend vs Revenue (Bubble)
-    if ad_col and revenue_col and profit_col:
-        fig_sc = px.scatter(df, x=ad_col, y=revenue_col, size=profit_col, color=profit_col,
-                            hover_data=[profit_col], title="Ad Spend vs Revenue (Bubble = Profit)")
+        if "Service Type" in filtered_df.columns:
+            with col1:
+                svc_summary = filtered_df.groupby("Service Type")[["Revenue", "Profit"]].sum().reset_index().sort_values("Revenue", ascending=False)
+                fig = px.bar(svc_summary, x="Service Type", y=["Revenue", "Profit"], barmode="group", title="Revenue vs Profit by Service Type")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if "Channel" in filtered_df.columns:
+                pie_data = filtered_df.groupby("Channel")["Revenue"].sum().reset_index()
+                fig = px.pie(pie_data, names="Channel", values="Revenue", title="Revenue Share by Channel")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Treemap
+        if "Region" in filtered_df.columns:
+            st.subheader("Revenue Distribution by Region & Service")
+            fig_tree = px.treemap(filtered_df, path=["Region", "Service Type"], values="Revenue", color="Profit", color_continuous_scale="Blues")
+            st.plotly_chart(fig_tree, use_container_width=True)
+
+    # ------------------------------
+    # TAB 3 — TRENDS
+    # ------------------------------
+    with tab3:
+        st.subheader("Time Trends")
+
+        monthly = filtered_df.set_index("Date").resample("M")[["Revenue", "Profit", "Ad Spend"]].sum().reset_index()
+        fig_line = px.line(monthly, x="Date", y=["Revenue", "Profit", "Ad Spend"], markers=True, title="Monthly Trends (Revenue, Profit, Ad Spend)")
+        st.plotly_chart(fig_line, use_container_width=True)
+
+        st.markdown("#### Day-of-Week Performance")
+        day_perf = filtered_df.groupby("Day")[["Revenue", "Profit"]].sum().reset_index().sort_values("Revenue", ascending=False)
+        fig_bar = px.bar(day_perf, x="Day", y=["Revenue", "Profit"], barmode="group")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ------------------------------
+    # TAB 4 — RELATIONSHIPS
+    # ------------------------------
+    with tab4:
+        st.subheader("Ad Spend vs Revenue vs Profit")
+
+        scatter_df = filtered_df.copy()
+        scatter_df = scatter_df.dropna(subset=["Revenue", "Ad Spend", "Profit"])
+        scatter_df = scatter_df[scatter_df["Profit"] >= 0]
+
+        fig_sc = px.scatter(
+            scatter_df,
+            x="Ad Spend",
+            y="Revenue",
+            size="Profit",
+            color="Channel" if "Channel" in scatter_df.columns else None,
+            hover_data=["Service Type", "Profit"] if "Service Type" in scatter_df.columns else ["Profit"],
+            title="Ad Spend vs Revenue (Bubble Size = Profit)"
+        )
         st.plotly_chart(fig_sc, use_container_width=True)
 
-    # 6️⃣ Correlation Heatmap
-    num_cols = df.select_dtypes(include='number')
-    if len(num_cols.columns) > 1:
-        corr = num_cols.corr()
-        fig_corr = px.imshow(corr, text_auto=True, title="Correlation Heatmap")
-        st.plotly_chart(fig_corr, use_container_width=True)
+        st.markdown("#### Correlation Heatmap")
+        num_cols = filtered_df.select_dtypes(include=np.number)
+        if not num_cols.empty:
+            corr = num_cols.corr()
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.heatmap(corr, annot=True, cmap="Blues", ax=ax)
+            st.pyplot(fig)
 
-    # 7️⃣ Daily Average Profit
-    if "day" in df and profit_col:
-        fig_day = px.bar(df.groupby("day")[profit_col].mean().reset_index(),
-                         x="day", y=profit_col, title="Average Profit by Day")
-        st.plotly_chart(fig_day, use_container_width=True)
-
-    # 8️⃣ Profit Margin by Category
-    if category_col and sales_col and profit_col:
-        df["profit_margin"] = df[profit_col] / df[sales_col]
-        fig_margin = px.bar(df.groupby(category_col)["profit_margin"].mean().reset_index(),
-                            x=category_col, y="profit_margin", title="Average Profit Margin by Category")
-        st.plotly_chart(fig_margin, use_container_width=True)
-
-    # 9️⃣ Sales vs Conversions Trend
-    if date_col and sales_col and conversion_col:
-        temp = df.groupby(date_col)[[sales_col, conversion_col]].sum().reset_index()
-        fig_conv = px.line(temp, x=date_col, y=[sales_col, conversion_col],
-                           title="Sales vs Conversions Over Time")
-        st.plotly_chart(fig_conv, use_container_width=True)
+    # ------------------------------
+    # TAB 5 — REGIONAL INSIGHTS
+    # ------------------------------
+    with tab5:
+        if "Region" in filtered_df.columns:
+            st.subheader("Geographic Revenue / Profit View")
+            fig_map = px.bar(filtered_df.groupby("Region")[["Revenue", "Profit"]].sum().reset_index(), x="Region", y=["Revenue", "Profit"], barmode="group", title="Performance by Region")
+            st.plotly_chart(fig_map, use_container_width=True)
+        else:
+            st.info("🌍 Region data not available in your dataset.")
 
 else:
-    st.info("👆 Please upload a dataset to start analysis.")
+    st.info("📤 Please upload a dataset to begin.")
