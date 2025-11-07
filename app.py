@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import numpy as np
 # -----------------
 # 4. Interactive Visualizations (Matplotlib + Seaborn)
 # -----------------
@@ -95,3 +98,4 @@ with tab3:
         ax.set_xlabel('Season')
         ax.set_ylabel('Revenue ($)')
         st.pyplot(fig)
+
