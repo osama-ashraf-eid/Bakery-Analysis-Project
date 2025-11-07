@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
 # ------------------ Page Setup ------------------
 st.set_page_config(page_title="Bakery Sales Dashboard", layout="wide")
@@ -25,83 +24,87 @@ if uploaded_file:
         st.error(f"Error loading file: {e}")
         st.stop()
 
-    # ------------------ Data Preparation ------------------
+    # Clean columns
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df["month"] = df["date"].dt.month_name()
-        df["day"] = df["date"].dt.day_name()
 
-    # ------------------ Column Mapping ------------------
-    col_map = {
-        "sales": "sales",
-        "profit": "profit",
-        "revenue": "revenue" if "revenue" in df.columns else "sales",
-        "ad_spend": "ad_spend" if "ad_spend" in df.columns else "cost",
-        "conversions": "conversions" if "conversions" in df.columns else None,
-        "category": "category" if "category" in df.columns else None,
-        "product": "product" if "product" in df.columns else None
-    }
+    # Detect columns automatically
+    def find_col(possible_names):
+        for name in possible_names:
+            for col in df.columns:
+                if name in col:
+                    return col
+        return None
 
-    # ------------------ Sidebar Filters ------------------
+    sales_col = find_col(["sales", "amount", "revenue"])
+    profit_col = find_col(["profit", "margin"])
+    revenue_col = find_col(["revenue", "income"])
+    ad_col = find_col(["ad", "marketing", "spend", "cost"])
+    conversion_col = find_col(["conversion", "order", "purchase"])
+    category_col = find_col(["category", "type", "group"])
+    product_col = find_col(["product", "item", "name"])
+    date_col = find_col(["date", "time"])
+
+    if date_col:
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df["month"] = df[date_col].dt.month_name()
+        df["day"] = df[date_col].dt.day_name()
+
+    # Sidebar Filters
     st.sidebar.header("Filters")
-    month_filter = st.sidebar.multiselect("Select Month(s)", df["month"].dropna().unique())
-    day_filter = st.sidebar.multiselect("Select Day(s)", df["day"].dropna().unique())
+    month_filter = st.sidebar.multiselect("Select Month(s)", df["month"].dropna().unique() if "month" in df else [])
+    day_filter = st.sidebar.multiselect("Select Day(s)", df["day"].dropna().unique() if "day" in df else [])
 
-    if month_filter:
+    if "month" in df and month_filter:
         df = df[df["month"].isin(month_filter)]
-    if day_filter:
+    if "day" in df and day_filter:
         df = df[df["day"].isin(day_filter)]
 
-    # ------------------ KPIs ------------------
-    total_sales = df[col_map["sales"]].sum()
-    total_profit = df[col_map["profit"]].sum()
-    total_revenue = df[col_map["revenue"]].sum()
-    total_conversions = df[col_map["conversions"]].sum() if col_map["conversions"] else 0
+    # KPIs
+    total_sales = df[sales_col].sum() if sales_col else 0
+    total_profit = df[profit_col].sum() if profit_col else 0
+    total_revenue = df[revenue_col].sum() if revenue_col else total_sales
+    total_conversions = df[conversion_col].sum() if conversion_col else 0
 
     st.markdown("### 📊 Key Metrics")
-    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("💰 Total Sales", f"${total_sales:,.0f}")
-    kpi2.metric("🏦 Total Revenue", f"${total_revenue:,.0f}")
-    kpi3.metric("📈 Total Profit", f"${total_profit:,.0f}")
-    kpi4.metric("🎯 Total Conversions", f"{total_conversions:,.0f}")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("💰 Total Sales", f"${total_sales:,.0f}")
+    k2.metric("🏦 Total Revenue", f"${total_revenue:,.0f}")
+    k3.metric("📈 Total Profit", f"${total_profit:,.0f}")
+    k4.metric("🎯 Total Conversions", f"{total_conversions:,.0f}")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ------------------ Visualizations ------------------
-    st.subheader("📉 Visual Insights")
+    st.subheader("📈 Visual Insights")
 
     # 1️⃣ Sales Trend
-    if "date" in df.columns:
-        fig_sales = px.line(df, x="date", y=col_map["sales"], title="Sales Trend Over Time")
+    if date_col and sales_col:
+        fig_sales = px.line(df, x=date_col, y=sales_col, title="Sales Trend Over Time")
         st.plotly_chart(fig_sales, use_container_width=True)
 
     # 2️⃣ Profit by Month
-    fig_profit = px.bar(df.groupby("month")[col_map["profit"]].sum().reset_index(),
-                        x="month", y=col_map["profit"], title="Profit by Month")
-    st.plotly_chart(fig_profit, use_container_width=True)
+    if profit_col and "month" in df:
+        fig_profit = px.bar(df.groupby("month")[profit_col].sum().reset_index(),
+                            x="month", y=profit_col, title="Profit by Month", color=profit_col)
+        st.plotly_chart(fig_profit, use_container_width=True)
 
     # 3️⃣ Revenue by Category
-    if col_map["category"]:
-        fig_cat = px.bar(df.groupby(col_map["category"])[col_map["revenue"]].sum().reset_index(),
-                         x=col_map["category"], y=col_map["revenue"],
-                         color=col_map["category"], title="Revenue by Category")
+    if category_col and revenue_col:
+        fig_cat = px.bar(df.groupby(category_col)[revenue_col].sum().reset_index(),
+                         x=category_col, y=revenue_col, color=category_col, title="Revenue by Category")
         st.plotly_chart(fig_cat, use_container_width=True)
 
-    # 4️⃣ Top 10 Products by Sales
-    if col_map["product"]:
-        top_products = df.groupby(col_map["product"])[col_map["sales"]].sum().nlargest(10).reset_index()
-        fig_top = px.bar(top_products, x=col_map["product"], y=col_map["sales"],
-                         title="Top 10 Products by Sales", color=col_map["sales"])
+    # 4️⃣ Top Products by Sales
+    if product_col and sales_col:
+        top_prod = df.groupby(product_col)[sales_col].sum().nlargest(10).reset_index()
+        fig_top = px.bar(top_prod, x=product_col, y=sales_col,
+                         title="Top 10 Products by Sales", color=sales_col)
         st.plotly_chart(fig_top, use_container_width=True)
 
     # 5️⃣ Ad Spend vs Revenue (Bubble)
-    if col_map["ad_spend"] and col_map["revenue"]:
-        scatter_df = df[[col_map["ad_spend"], col_map["revenue"], col_map["profit"]]].dropna()
-        fig_sc = px.scatter(scatter_df, x=col_map["ad_spend"], y=col_map["revenue"],
-                            size=col_map["profit"], color=col_map["profit"],
-                            hover_data=[col_map["profit"]],
-                            title="Ad Spend vs Revenue (Bubble = Profit)")
+    if ad_col and revenue_col and profit_col:
+        fig_sc = px.scatter(df, x=ad_col, y=revenue_col, size=profit_col, color=profit_col,
+                            hover_data=[profit_col], title="Ad Spend vs Revenue (Bubble = Profit)")
         st.plotly_chart(fig_sc, use_container_width=True)
 
     # 6️⃣ Correlation Heatmap
@@ -112,10 +115,24 @@ if uploaded_file:
         st.plotly_chart(fig_corr, use_container_width=True)
 
     # 7️⃣ Daily Average Profit
-    if "day" in df.columns:
-        fig_day = px.bar(df.groupby("day")[col_map["profit"]].mean().reset_index(),
-                         x="day", y=col_map["profit"], title="Average Profit by Day")
+    if "day" in df and profit_col:
+        fig_day = px.bar(df.groupby("day")[profit_col].mean().reset_index(),
+                         x="day", y=profit_col, title="Average Profit by Day")
         st.plotly_chart(fig_day, use_container_width=True)
+
+    # 8️⃣ Profit Margin by Category
+    if category_col and sales_col and profit_col:
+        df["profit_margin"] = df[profit_col] / df[sales_col]
+        fig_margin = px.bar(df.groupby(category_col)["profit_margin"].mean().reset_index(),
+                            x=category_col, y="profit_margin", title="Average Profit Margin by Category")
+        st.plotly_chart(fig_margin, use_container_width=True)
+
+    # 9️⃣ Sales vs Conversions Trend
+    if date_col and sales_col and conversion_col:
+        temp = df.groupby(date_col)[[sales_col, conversion_col]].sum().reset_index()
+        fig_conv = px.line(temp, x=date_col, y=[sales_col, conversion_col],
+                           title="Sales vs Conversions Over Time")
+        st.plotly_chart(fig_conv, use_container_width=True)
 
 else:
     st.info("👆 Please upload a dataset to start analysis.")
