@@ -9,30 +9,39 @@ import plotly.express as px
 st.set_page_config(page_title="Bakery Analytics Dashboard", layout="wide")
 
 # ---------------------------
-# Elegant Soft Beige Gradient Background
+# Improved Clean Background + Bakery Logo
 # ---------------------------
 st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(135deg, #f9f5f0 0%, #fefdfb 50%, #fffaf4 100%);
+        background: radial-gradient(circle at top right, #f8f5f1 5%, #ffffff 40%, #ffffff 100%);
         font-family: 'Segoe UI', sans-serif;
-    }
-    .stMetric, .stDataFrame, .stPlotlyChart, .stMarkdown {
-        background: rgba(255,255,255,0.85);
-        border-radius: 10px;
-        padding: 10px;
-    }
-    .stTabs [role="tablist"] {
-        background: rgba(255, 255, 255, 0.6);
-        border-radius: 10px;
-        padding: 5px;
     }
     h1, h2, h3 {
         color: #5c4033;
         font-weight: 600;
     }
+    .stMetric, .stDataFrame, .stPlotlyChart, .stMarkdown {
+        background: rgba(255,255,255,0.9);
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .stTabs [role="tablist"] {
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 10px;
+        padding: 5px;
+    }
+    #bakery-logo {
+        position: absolute;
+        top: 25px;
+        right: 35px;
+        width: 70px;
+        opacity: 0.9;
+    }
     </style>
+
+    <img id="bakery-logo" src="https://cdn-icons-png.flaticon.com/512/3075/3075977.png" alt="Bakery Logo">
     """,
     unsafe_allow_html=True,
 )
@@ -40,7 +49,7 @@ st.markdown(
 # ---------------------------
 # Header
 # ---------------------------
-st.title("🍞 Bakery Performance Dashboard")
+st.title("🥖 Bakery Performance Dashboard")
 st.caption("Interactive insights comparing **Revenue** and **Profit** across multiple dimensions")
 
 # ---------------------------
@@ -113,7 +122,6 @@ channels = multiselect_filter(df, col_map["channel"], "Channel")
 services = multiselect_filter(df, col_map["service"], "Service Type")
 seasons = multiselect_filter(df, col_map["season"], "Season")
 times = multiselect_filter(df, col_map["time_of_day"], "Time of Day")
-
 months = multiselect_filter(df, "Month", "Month")
 days = multiselect_filter(df, "Day", "Day")
 
