@@ -5,8 +5,8 @@ import plotly.express as px
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Fix for matplotlib display issue in Streamlit
-st.set_option('deprecation.showPyplotGlobalUse', False)
+# NOTE: The problematic line st.set_option('deprecation.showPyplotGlobalUse', False)
+# has been removed as it is no longer supported and caused the StreamlitAPIException.
 
 # --------------------------------
 # PAGE CONFIGURATION
@@ -158,16 +158,16 @@ if uploaded_file:
         with col1: kpi_card("Total Revenue", total_revenue)
         with col2: kpi_card("Total Profit", total_profit)
         with col3: kpi_card("Total Conversions", total_conversions, is_currency=False)
-        with col4: kpi_card("Profit Margin", profit_margin * 100, is_currency=False, help_text="Profit / Revenue", color='green')
-        with col5: kpi_card("Return on Ad Spend (ROAS)", roas, is_currency=False, help_text="Revenue / Ad Spend", color='green')
-        with col6: kpi_card("Average Order Value (AOV)", aov, help_text="Total Revenue / Number of Transactions")
+        with col4: kpi_card("Profit Margin (%)", profit_margin * 100, is_currency=False, help_text="Profit / Revenue", color='green')
+        with col5: kpi_card("ROAS", roas, is_currency=False, help_text="Revenue / Ad Spend", color='green')
+        with col6: kpi_card("AOV", aov, help_text="Total Revenue / Transactions")
         
         st.markdown("---")
         
         # ----------------------
         # 7 Visualizations for the Page
         # ----------------------
-        st.markdown("#### Analysis by Channel, Customer, and Service")
+        st.markdown("#### Analysis by Channel, Customer, and Service (7 Charts)")
         
         col_a, col_b = st.columns(2)
         
@@ -209,7 +209,7 @@ if uploaded_file:
             if "Channel" in filtered_df.columns:
                 channel_conv_avg = filtered_df.groupby("Channel")["Conversions"].mean().sort_values(ascending=False).reset_index()
                 fig_channel_conv_avg = px.bar(channel_conv_avg, x="Channel", y="Conversions", 
-                                            title="4. Average Conversions by Channel", color="Channel",
+                                            title="4. Avg Conversions by Channel", color="Channel",
                                             template="plotly_white", labels={'Conversions':'Avg Conversions'})
                 st.plotly_chart(fig_channel_conv_avg, use_container_width=True)
             else: st.info("Channel column is not available for analysis.")
@@ -231,7 +231,7 @@ if uploaded_file:
             if "Service Type" in filtered_df.columns and "Customer Type" in filtered_df.columns:
                 service_cust_rev = filtered_df.groupby(["Service Type", "Customer Type"])["Revenue"].mean().reset_index()
                 fig_service_cust_rev = px.bar(service_cust_rev, x="Service Type", y="Revenue", 
-                                              color="Customer Type", title="6. Average Revenue: Service & Customer Type",
+                                              color="Customer Type", title="6. Avg Revenue: Service & Customer Type",
                                               barmode='group', template="plotly_white")
                 st.plotly_chart(fig_service_cust_rev, use_container_width=True)
             else: st.info("Service Type or Customer Type columns are not available.")
@@ -256,7 +256,7 @@ if uploaded_file:
         daily_trends = filtered_df.groupby("Date")[["Revenue", "Profit", "Ad Spend", "Conversions"]].sum().reset_index()
         
         # 1. Daily Revenue and Profit Trend - Line Chart
-        st.markdown("#### 1. Daily Revenue and Profit Trend")
+        st.markdown("#### 1. Daily Revenue and Profit Trend (7 Charts)")
         fig_rev_trend = px.line(daily_trends, x="Date", y=["Revenue", "Profit"], 
                                 title="Daily Revenue and Profit Trend",
                                 labels={"value": "Amount ($)", "variable": "Metric"},
@@ -317,7 +317,7 @@ if uploaded_file:
                 cpc_data = cpc_data.sort_values('CPC', ascending=False)
                 
                 fig_cpc = px.bar(cpc_data, x="Channel", y="CPC", 
-                                title="6. Average Cost Per Conversion (CPC) by Channel", 
+                                title="6. Avg Cost Per Conversion (CPC) by Channel", 
                                 template="plotly_white", color="Channel")
                 st.plotly_chart(fig_cpc, use_container_width=True)
             else: st.info("Channel column is not available.")
@@ -339,7 +339,7 @@ if uploaded_file:
         st.header("💸 Financial Performance & Profit Analysis")
 
         # 1. Ad Spend vs. Revenue (Bubble Size = Profit) - Scatter Plot
-        st.markdown("#### 1. Ad Spend vs. Revenue (Bubble Size = Profit)")
+        st.markdown("#### 1. Ad Spend vs. Revenue (Bubble Size = Profit) (7 Charts)")
         
         num_cols = ["Ad Spend", "Revenue", "Profit"]
         scatter_df = filtered_df[num_cols + ([c for c in ["Channel", "Service Type"] if c in filtered_df.columns])]
@@ -419,7 +419,7 @@ if uploaded_file:
             else: st.info("Channel column is not available.")
         
         # 7. Average Return on Ad Spend (ROAS) by Service Type - Bar Chart
-        st.markdown("#### 7. Average Return on Ad Spend (ROAS) by Service Type")
+        st.markdown("#### 7. Average ROAS by Service Type")
         if "Service Type" in filtered_df.columns:
             roas_data = filtered_df.groupby("Service Type").agg(
                 Total_Revenue=('Revenue', 'sum'),
@@ -475,7 +475,7 @@ if uploaded_file:
                 day_cust_rev = day_cust_rev.sort_values('Day')
                 
                 fig_day_cust_rev = px.bar(day_cust_rev, x="Day", y="Revenue", color="Customer Type", 
-                                          title="3. Average Revenue: Day of Week & Customer Type", barmode='group',
+                                          title="3. Avg Revenue: Day of Week & Customer Type", barmode='group',
                                           template="plotly_white")
                 st.plotly_chart(fig_day_cust_rev, use_container_width=True)
             else: st.info("Day and Customer Type columns are not available.")
