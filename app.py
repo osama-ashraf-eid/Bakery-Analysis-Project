@@ -5,62 +5,34 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
+import plotly.graph_objects as go
 
 # ---------------------------
 # Page Config
 # ---------------------------
-st.set_page_config(page_title="Bakery Analytics Dashboard", layout="wide")
+st.set_page_config(page_title="Bakery Performance Dashboard", layout="wide")
 
 # ---------------------------
-# Background Image (Bakery Theme)
+# Header Section
 # ---------------------------
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background: linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.95)),
-                    url("https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrZXJ5JTIwcHJvZHVjdHN8ZW58MHx8MHx8fDA%3D&ixlib=rb-4.1.0&q=60&w=3000");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        font-family: 'Segoe UI', sans-serif;
-    }
-    h1, h2, h3, h4 {
-        color: #5c4033;
-        font-weight: 600;
-    }
-    .stMetric, .stDataFrame, .stPlotlyChart, .stMarkdown {
-        background: rgba(255,255,255,0.9);
-        border-radius: 10px;
-        padding: 10px;
-    }
-    #bakery-logo {
-        position: absolute;
-        top: 25px;
-        right: 35px;
-        width: 70px;
-        opacity: 0.9;
-    }
-    </style>
-    <img id="bakery-logo" src="https://cdn-icons-png.flaticon.com/512/3075/3075977.png" alt="Bakery Logo">
-    """,
-    unsafe_allow_html=True,
+st.title("🥖 Bakery Performance Dashboard")
+st.caption("Interactive insights comparing **Revenue**, **Profit**, and **Ad Spend** across multiple dimensions")
+
+# ✅ Add image banner below the title
+st.image(
+    "https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrZXJ5JTIwcHJvZHVjdHN8ZW58MHx8MHx8fDA%3D&ixlib=rb-4.1.0&q=60&w=2000",
+    use_container_width=True,
+    caption="Freshly baked insights 🍞"
 )
 
 # ---------------------------
-# Header
+# Sidebar Data Upload
 # ---------------------------
-st.title("🥖 Bakery Performance Dashboard")
-st.caption("Interactive insights comparing **Revenue** and **Profit** across multiple dimensions")
-
-# ---------------------------
-# Upload Data
-# ---------------------------
-st.sidebar.header("📊 Data Upload")
+st.sidebar.header("📊 Upload Dataset")
 uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
 
 if uploaded_file is None:
-    st.sidebar.info("Please upload your dataset (with columns like Date, Channel, Service Type, Revenue, Ad Spend).")
+    st.sidebar.info("Please upload your dataset (CSV or Excel) containing sales, revenue, profit, etc.")
     st.stop()
 
 if uploaded_file.name.endswith(".csv"):
@@ -69,7 +41,7 @@ else:
     df = pd.read_excel(uploaded_file)
 
 # ---------------------------
-# Detect columns automatically
+# Auto column detection
 # ---------------------------
 def detect_col(df, keywords):
     for col in df.columns:
@@ -83,111 +55,136 @@ col_map = {
     "channel": detect_col(df, ["channel", "platform", "marketing"]),
     "service": detect_col(df, ["service", "category", "product"]),
     "revenue": detect_col(df, ["revenue", "sales", "income"]),
-    "ad_spend": detect_col(df, ["ad spend", "spend", "cost", "advertising"]),
-    "season": detect_col(df, ["season", "quarter"]),
-    "time_of_day": detect_col(df, ["time", "session"]),
+    "ad_spend": detect_col(df, ["ad spend", "spend", "cost"]),
+    "region": detect_col(df, ["region", "area", "country"]),
 }
 
 # ---------------------------
-# Data prep
+# Data Preparation
 # ---------------------------
 if col_map["date"]:
     df[col_map["date"]] = pd.to_datetime(df[col_map["date"]], errors="coerce")
-    df["Month"] = df[col_map["date"]].dt.month_name()
-    df["Day"] = df[col_map["date"]].dt.day
-else:
-    df["Month"], df["Day"] = np.nan, np.nan
+    df["Month"] = df[col_map["date"]].dt.strftime("%b %Y")
 
 df["Profit"] = df[col_map["revenue"]] - df[col_map["ad_spend"]]
 df["ROAS"] = df[col_map["revenue"]] / df[col_map["ad_spend"]].replace({0: np.nan})
 
 # ---------------------------
-# Sidebar Filters
+# Filters
 # ---------------------------
 st.sidebar.header("🎛️ Filters")
 
-def multi_filter(df, col, name):
+def multiselect_filter(df, col, label):
     if col and col in df.columns:
-        opts = sorted(df[col].dropna().unique().tolist())
-        return st.sidebar.multiselect(name, opts, default=opts)
+        options = sorted(df[col].dropna().unique())
+        return st.sidebar.multiselect(label, options, default=options)
     return []
 
 filters = {
-    "channel": multi_filter(df, col_map["channel"], "Channel"),
-    "service": multi_filter(df, col_map["service"], "Service Type"),
-    "season": multi_filter(df, col_map["season"], "Season"),
-    "time": multi_filter(df, col_map["time_of_day"], "Time of Day"),
-    "month": multi_filter(df, "Month", "Month"),
-    "day": multi_filter(df, "Day", "Day")
+    "channel": multiselect_filter(df, col_map["channel"], "Channel"),
+    "service": multiselect_filter(df, col_map["service"], "Service Type"),
+    "region": multiselect_filter(df, col_map["region"], "Region"),
+    "month": multiselect_filter(df, "Month", "Month"),
 }
 
 filtered = df.copy()
 for key, vals in filters.items():
-    col = col_map.get(key) if key in col_map else key.capitalize()
+    col = col_map.get(key) if key in col_map else key
     if vals and col in filtered.columns:
         filtered = filtered[filtered[col].isin(vals)]
 
 if filtered.empty:
-    st.warning("⚠️ No data matches your filter selections.")
+    st.warning("⚠️ No data found with the selected filters.")
     st.stop()
 
 # ---------------------------
-# KPIs
+# KPI Metrics
 # ---------------------------
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Revenue", f"${filtered[col_map['revenue']].sum():,.2f}")
 col2.metric("Total Profit", f"${filtered['Profit'].sum():,.2f}")
-col3.metric("Avg ROAS", f"{filtered['ROAS'].mean():.2f}")
+col3.metric("Total Ad Spend", f"${filtered[col_map['ad_spend']].sum():,.2f}")
+col4.metric("Average ROAS", f"{filtered['ROAS'].mean():.2f}")
+
+st.markdown("---")
 
 # ---------------------------
-# Tabs
+# Tabs with Multiple Visualizations
 # ---------------------------
-tab1, tab2, tab3 = st.tabs(["📊 Channel & Service", "📈 Trends", "📉 Statistics"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 Revenue & Profit Breakdown",
+    "📈 Trends & Performance",
+    "🗺️ Regions & Channels",
+    "📉 Correlations & Insights"
+])
 
-def compare_bar(df_grouped, group_col, title):
-    df_grouped = df_grouped.sort_values("Revenue", ascending=False)
-    melted = df_grouped.melt(id_vars=[group_col], value_vars=["Revenue", "Profit"], var_name="Metric", value_name="Value")
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.barplot(data=melted, x=group_col, y="Value", hue="Metric", ax=ax)
-    ax.set_title(title)
-    ax.set_xlabel(group_col)
-    ax.set_ylabel("Value ($)")
-    ax.tick_params(axis="x", rotation=45)
-    st.pyplot(fig)
-
+# Tab 1 - Revenue vs Profit by Categories
 with tab1:
-    st.markdown("### Revenue vs Profit by Channel & Service")
+    st.subheader("Revenue vs Profit by Category / Channel")
 
-    c1, c2 = st.columns(2)
     if col_map["channel"]:
-        grp = filtered.groupby(col_map["channel"]).agg(Revenue=(col_map["revenue"], "sum"), Profit=("Profit", "sum")).reset_index()
-        with c1:
-            compare_bar(grp, col_map["channel"], "Revenue vs Profit by Channel")
-
-    if col_map["service"]:
-        grp = filtered.groupby(col_map["service"]).agg(Revenue=(col_map["revenue"], "sum"), Profit=("Profit", "sum")).reset_index()
-        with c2:
-            compare_bar(grp, col_map["service"], "Revenue vs Profit by Service Type")
-
-with tab2:
-    st.markdown("### Monthly Revenue vs Profit Trend")
-    if col_map["date"]:
-        df_month = filtered.set_index(col_map["date"]).resample("M").agg({
+        grp = filtered.groupby(col_map["channel"]).agg({
             col_map["revenue"]: "sum",
             "Profit": "sum"
         }).reset_index()
-        df_month["Month"] = df_month[col_map["date"]].dt.strftime("%Y-%m")
-        fig = px.line(df_month, x="Month", y=[col_map["revenue"], "Profit"], markers=True, title="Monthly Revenue vs Profit")
+
+        fig = px.bar(
+            grp, x=col_map["channel"], y=[col_map["revenue"], "Profit"],
+            barmode="group", title="Revenue vs Profit by Channel"
+        )
         st.plotly_chart(fig, use_container_width=True)
 
-with tab3:
-    st.markdown("### Descriptive Statistics")
-    st.dataframe(filtered[[col_map["revenue"], "Profit", "ROAS"]].describe().T)
+    if col_map["service"]:
+        grp2 = filtered.groupby(col_map["service"]).agg({
+            col_map["revenue"]: "sum",
+            "Profit": "sum"
+        }).reset_index()
 
-    st.markdown("### Profit & Revenue Distribution")
-    fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-    sns.histplot(filtered[col_map["revenue"]], kde=True, color="skyblue", ax=ax[0])
-    ax[0].set_title("Revenue Distribution")
-    sns.histplot(filtered["Profit"], kde=True, color="orange", ax=ax[1])
-    ax[1].set_title("Profit Distribution")
-    st.pyplot(fig)
+        fig2 = px.pie(grp2, names=col_map["service"], values=col_map["revenue"],
+                      title="Revenue Share by Service Type", hole=0.4)
+        st.plotly_chart(fig2, use_container_width=True)
+
+# Tab 2 - Trend Analysis
+with tab2:
+    st.subheader("Monthly Revenue & Profit Trend")
+
+    if col_map["date"]:
+        df_month = filtered.set_index(col_map["date"]).resample("M").agg({
+            col_map["revenue"]: "sum",
+            "Profit": "sum",
+            col_map["ad_spend"]: "sum"
+        }).reset_index()
+
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=df_month[col_map["date"]], y=df_month[col_map["revenue"]], mode='lines+markers', name='Revenue'))
+        fig3.add_trace(go.Scatter(x=df_month[col_map["date"]], y=df_month["Profit"], mode='lines+markers', name='Profit'))
+        fig3.add_trace(go.Bar(x=df_month[col_map["date"]], y=df_month[col_map["ad_spend"]], name='Ad Spend', opacity=0.5))
+        fig3.update_layout(title="Revenue, Profit, and Ad Spend Over Time")
+        st.plotly_chart(fig3, use_container_width=True)
+
+# Tab 3 - Region / Channel Visuals
+with tab3:
+    st.subheader("Performance by Region and Channel")
+
+    if col_map["region"] and col_map["channel"]:
+        pivot = filtered.pivot_table(
+            index=col_map["region"], columns=col_map["channel"],
+            values=col_map["revenue"], aggfunc="sum"
+        )
+        st.dataframe(pivot.style.format("{:,.2f}"))
+
+        fig4 = px.imshow(pivot, text_auto=True, title="Revenue Heatmap by Region & Channel")
+        st.plotly_chart(fig4, use_container_width=True)
+
+# Tab 4 - Correlations & Distribution
+with tab4:
+    st.subheader("Correlations and Distribution Insights")
+
+    corr = filtered[[col_map["revenue"], "Profit", "ROAS", col_map["ad_spend"]]].corr()
+    fig5 = px.imshow(corr, text_auto=True, title="Correlation Matrix")
+    st.plotly_chart(fig5, use_container_width=True)
+
+    st.markdown("### Profit Distribution")
+    fig6, ax = plt.subplots(figsize=(6, 3))
+    sns.histplot(filtered["Profit"], kde=True, ax=ax)
+    st.pyplot(fig6)
