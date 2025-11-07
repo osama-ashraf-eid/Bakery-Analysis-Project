@@ -82,8 +82,9 @@ if uploaded_file:
     # ------------------------------
     # Tabs
     # ------------------------------
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏠 Overview", "💵 Revenue & Profit", "📈 Trends", "📊 Relationships", "🌍 Regional Insights"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "🏠 Overview", "💵 Revenue & Profit", "📈 Trends", "📊 Relationships",
+        "🧍 Customers & Conversions", "🌤️ Time & Season", "🌍 Regional Insights"
     ])
 
     # ------------------------------
@@ -112,7 +113,7 @@ if uploaded_file:
             st.plotly_chart(fig, use_container_width=True)
 
     # ------------------------------
-    # TAB 2 — Revenue & Profit Visuals
+    # TAB 2 — REVENUE & PROFIT
     # ------------------------------
     with tab2:
         st.subheader("Revenue & Profit Insights")
@@ -121,7 +122,7 @@ if uploaded_file:
 
         if "Service Type" in filtered_df.columns:
             with col1:
-                svc_summary = filtered_df.groupby("Service Type")[["Revenue", "Profit"]].sum().reset_index().sort_values("Revenue", ascending=False)
+                svc_summary = filtered_df.groupby("Service Type")[["Revenue", "Profit"]].sum().reset_index()
                 fig = px.bar(svc_summary, x="Service Type", y=["Revenue", "Profit"], barmode="group", title="Revenue vs Profit by Service Type")
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -131,11 +132,9 @@ if uploaded_file:
                 fig = px.pie(pie_data, names="Channel", values="Revenue", title="Revenue Share by Channel")
                 st.plotly_chart(fig, use_container_width=True)
 
-        # Treemap
-        if "Region" in filtered_df.columns:
-            st.subheader("Revenue Distribution by Region & Service")
-            fig_tree = px.treemap(filtered_df, path=["Region", "Service Type"], values="Revenue", color="Profit", color_continuous_scale="Blues")
-            st.plotly_chart(fig_tree, use_container_width=True)
+        st.markdown("#### Profit Distribution")
+        fig_box = px.box(filtered_df, x="Channel", y="Profit", color="Service Type", title="Profit Distribution by Channel & Service")
+        st.plotly_chart(fig_box, use_container_width=True)
 
     # ------------------------------
     # TAB 3 — TRENDS
@@ -148,49 +147,67 @@ if uploaded_file:
         st.plotly_chart(fig_line, use_container_width=True)
 
         st.markdown("#### Day-of-Week Performance")
-        day_perf = filtered_df.groupby("Day")[["Revenue", "Profit"]].sum().reset_index().sort_values("Revenue", ascending=False)
-        fig_bar = px.bar(day_perf, x="Day", y=["Revenue", "Profit"], barmode="group")
+        day_perf = filtered_df.groupby("Day")[["Revenue", "Profit"]].sum().reset_index()
+        fig_bar = px.bar(day_perf, x="Day", y=["Revenue", "Profit"], barmode="group", title="Performance by Day of Week")
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # ------------------------------
     # TAB 4 — RELATIONSHIPS
     # ------------------------------
     with tab4:
-        st.subheader("Ad Spend vs Revenue vs Profit")
+        st.subheader("Correlations & Relationships")
 
-        scatter_df = filtered_df.copy()
-        scatter_df = scatter_df.dropna(subset=["Revenue", "Ad Spend", "Profit"])
-        scatter_df = scatter_df[scatter_df["Profit"] >= 0]
-
+        scatter_df = filtered_df.dropna(subset=["Revenue", "Ad Spend", "Profit"])
         fig_sc = px.scatter(
-            scatter_df,
-            x="Ad Spend",
-            y="Revenue",
-            size="Profit",
+            scatter_df, x="Ad Spend", y="Revenue", size="Profit",
             color="Channel" if "Channel" in scatter_df.columns else None,
-            hover_data=["Service Type", "Profit"] if "Service Type" in scatter_df.columns else ["Profit"],
+            hover_data=["Service Type", "Profit"],
             title="Ad Spend vs Revenue (Bubble Size = Profit)"
         )
         st.plotly_chart(fig_sc, use_container_width=True)
 
-        st.markdown("#### Correlation Heatmap")
         num_cols = filtered_df.select_dtypes(include=np.number)
         if not num_cols.empty:
-            corr = num_cols.corr()
+            st.markdown("#### Correlation Heatmap")
             fig, ax = plt.subplots(figsize=(6, 4))
-            sns.heatmap(corr, annot=True, cmap="Blues", ax=ax)
+            sns.heatmap(num_cols.corr(), annot=True, cmap="Blues", ax=ax)
             st.pyplot(fig)
 
+            st.markdown("#### Pairwise Relationship Plot")
+            sns.pairplot(num_cols)
+            st.pyplot()
+
     # ------------------------------
-    # TAB 5 — REGIONAL INSIGHTS
+    # TAB 5 — CUSTOMERS
     # ------------------------------
     with tab5:
-        if "Region" in filtered_df.columns:
-            st.subheader("Geographic Revenue / Profit View")
-            fig_map = px.bar(filtered_df.groupby("Region")[["Revenue", "Profit"]].sum().reset_index(), x="Region", y=["Revenue", "Profit"], barmode="group", title="Performance by Region")
-            st.plotly_chart(fig_map, use_container_width=True)
-        else:
-            st.info("🌍 Region data not available in your dataset.")
+        st.subheader("Customer & Conversion Analysis")
+
+        if "Customer Type" in filtered_df.columns:
+            conv_by_cust = filtered_df.groupby("Customer Type")["Conversions"].sum().reset_index()
+            fig = px.pie(conv_by_cust, names="Customer Type", values="Conversions", title="Conversions by Customer Type")
+            st.plotly_chart(fig, use_container_width=True)
+
+        if "Channel" in filtered_df.columns:
+            conv_channel = filtered_df.groupby("Channel")["Conversions"].sum().reset_index()
+            fig2 = px.bar(conv_channel, x="Channel", y="Conversions", title="Conversions by Channel")
+            st.plotly_chart(fig2, use_container_width=True)
+
+    # ------------------------------
+    # TAB 6 — SEASONAL / TIME
+    # ------------------------------
+    with tab6:
+        st.subheader("Seasonal & Time-of-Day Analysis")
+
+        if "Season" in filtered_df.columns:
+            fig = px.box(filtered_df, x="Season", y="Revenue", color="Channel", title="Revenue Distribution by Season")
+            st.plotly_chart(fig, use_container_width=True)
+
+        if "Time of Day" in filtered_df.columns:
+            fig2 = px.bar(filtered_df, x="Time of Day", y="Profit", color="Channel", title="Profit by Time of Day")
+            st.plotly_chart(fig2, use_container_width=True)
+
+   
 
 else:
     st.info("📤 Please upload a dataset to begin.")
