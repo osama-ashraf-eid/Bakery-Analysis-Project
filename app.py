@@ -4,21 +4,6 @@ import numpy as np
 import plotly.express as px
 import matplotlib.pyplot as plt
 import seaborn as sns
-from io import StringIO
-
-# --------------------------------
-# SIMULATED FILE CONTENT
-# This data comes from your provided file content.
-# --------------------------------
-# Note: I am fixing the initial unnamed column and the slightly incorrect final profit value.
-SIMULATED_FILE_CONTENT = """
-,Date,Time of Day,Revenue,Ad Spend,Conversions,Season,Channel,Service Type,Customer Type,Month,Day,Profit
-48,2024-12-16T00:00:00.000,Afternoon,194.34,15.53,3,Winter,Facebook,Premium,Returning,December,Monday,178.81
-103,2024-12-15T00:00:00.000,Morning,104.24,3.44,10,Winter,Instagram,Premium,New,December,Sunday,100.8
-104,2024-12-16T00:00:00.000,Morning,290.17,26.41,6,Winter,Instagram,Premium,New,December,Monday,263.76
-147,2024-12-25T00:00:00.000,Afternoon,197.84,47.68,8,Winter,Facebook,Package,New,December,Wednesday,150.16
-177,2024-12-28T00:00:00.000,Afternoon,393.09,4.67,10,Winter,Instagram,Package,Returning,December,Saturday,388.42
-"""
 
 # --------------------------------
 # PAGE CONFIGURATION
@@ -34,20 +19,21 @@ st.image(
 st.markdown("---")
 
 # --------------------------------
-# DATA LOADING AND SIDEBAR FILTERS (MODIFIED)
+# DATA LOADING AND SIDEBAR FILTERS (DYNAMIC)
 # --------------------------------
 st.sidebar.header("🔍 Filters")
 
-# --- START MODIFICATION ---
-# Simulate file upload for execution environment
-uploaded_file_data = StringIO(SIMULATED_FILE_CONTENT)
-if uploaded_file_data: # Data is present
+uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+
+if uploaded_file:
     
     @st.cache_data
-    def load_data(file_data):
+    def load_data(uploaded_file):
         try:
-            # Read directly from the simulated string buffer
-            df = pd.read_csv(file_data, index_col=0)
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
             
         except Exception as e:
             st.error(f"❌ Error reading data: {e}")
@@ -69,37 +55,37 @@ if uploaded_file_data: # Data is present
 
         # Profit calculation (Profit = Revenue - Ad Spend)
         if "Revenue" in df.columns and "Ad Spend" in df.columns:
-            # Convert financial columns to numeric
-            for col in ["Revenue", "Ad Spend", "Conversions", "Profit"]:
+            for col in ["Revenue", "Ad Spend", "Conversions"]:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
             
-            # Recalculate profit to ensure consistency, only if initial calculation was missing
-            # df["Profit"] = df["Revenue"] - df["Ad Spend"]
+            df["Profit"] = df["Revenue"] - df["Ad Spend"]
         
         # Order days of the week for visualization
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         if 'Day' in df.columns:
-            df['Day'] = pd.Categorical(df['Day'], categories=day_order, ordered=True)
+            # Ensure day column exists before attempting to categorize
+            if df['Day'].dtype != 'category':
+                df['Day'] = pd.Categorical(df['Day'], categories=day_order, ordered=True)
 
         return df
 
-    df = load_data(uploaded_file_data)
+    df = load_data(uploaded_file)
     
     if df.empty or "Date" not in df.columns:
         st.error("❌ Could not load data or 'Date' column is missing/invalid.")
         st.stop()
-# --- END MODIFICATION ---
     
     # ----------------------
-    # Sidebar Filters
+    # Sidebar Filters (All unique values are included)
     # ----------------------
     filters = {}
-    if "Channel" in df.columns: filters["Channel"] = st.sidebar.multiselect("Select Channel(s):", sorted(df["Channel"].dropna().unique()))
-    if "Service Type" in df.columns: filters["Service Type"] = st.sidebar.multiselect("Select Service Type(s):", sorted(df["Service Type"].dropna().unique()))
-    if "Month" in df.columns: filters["Month"] = st.sidebar.multiselect("Select Month(s):", sorted(df["Month"].dropna().unique()))
-    if "Day" in df.columns: filters["Day"] = st.sidebar.multiselect("Select Day(s):", sorted(df["Day"].dropna().unique()))
-    if "Season" in df.columns: filters["Season"] = st.sidebar.multiselect("Select Season(s):", sorted(df["Season"].dropna().unique()))
-    if "Time of Day" in df.columns: filters["Time of Day"] = st.sidebar.multiselect("Select Time(s) of Day:", sorted(df["Time of Day"].dropna().unique()))
+    if "Channel" in df.columns: filters["Channel"] = st.sidebar.multiselect("Select Channel(s):", options=sorted(df["Channel"].dropna().unique()), default=sorted(df["Channel"].dropna().unique()))
+    if "Service Type" in df.columns: filters["Service Type"] = st.sidebar.multiselect("Select Service Type(s):", options=sorted(df["Service Type"].dropna().unique()), default=sorted(df["Service Type"].dropna().unique()))
+    if "Month" in df.columns: filters["Month"] = st.sidebar.multiselect("Select Month(s):", options=sorted(df["Month"].dropna().unique()), default=sorted(df["Month"].dropna().unique()))
+    if "Day" in df.columns: filters["Day"] = st.sidebar.multiselect("Select Day(s):", options=df["Day"].cat.categories.tolist() if 'category' in str(df['Day'].dtype) else sorted(df["Day"].dropna().unique()), default=df["Day"].cat.categories.tolist() if 'category' in str(df['Day'].dtype) else sorted(df["Day"].dropna().unique()))
+    if "Season" in df.columns: filters["Season"] = st.sidebar.multiselect("Select Season(s):", options=sorted(df["Season"].dropna().unique()), default=sorted(df["Season"].dropna().unique()))
+    if "Time of Day" in df.columns: filters["Time of Day"] = st.sidebar.multiselect("Select Time(s) of Day:", options=sorted(df["Time of Day"].dropna().unique()), default=sorted(df["Time of Day"].dropna().unique()))
+    if "Customer Type" in df.columns: filters["Customer Type"] = st.sidebar.multiselect("Select Customer Type(s):", options=sorted(df["Customer Type"].dropna().unique()), default=sorted(df["Customer Type"].dropna().unique()))
 
     min_rev, max_rev, min_profit, max_profit = 0, 0, 0, 0
     if "Revenue" in df.columns and "Profit" in df.columns:
@@ -538,5 +524,4 @@ if uploaded_file_data: # Data is present
 
 
 else:
-    # This block will now run if the simulated data is empty, but not if the simulated data is present.
     st.info("📤 Please upload a dataset to begin.")
