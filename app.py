@@ -6,19 +6,26 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
 
+# ---------------------------
+# Page Config
+# ---------------------------
 st.set_page_config(page_title="Bakery Analytics Dashboard", layout="wide")
 
 # ---------------------------
-# Improved Clean Background + Bakery Logo
+# Background Image (Bakery Theme)
 # ---------------------------
 st.markdown(
     """
     <style>
     .stApp {
-        background: radial-gradient(circle at top right, #f8f5f1 5%, #ffffff 40%, #ffffff 100%);
+        background: linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.95)),
+                    url("https://images.unsplash.com/photo-1608198093002-ad4e005484ec?fm=jpg&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YmFrZXJ5JTIwcHJvZHVjdHN8ZW58MHx8MHx8fDA%3D&ixlib=rb-4.1.0&q=60&w=3000");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
         font-family: 'Segoe UI', sans-serif;
     }
-    h1, h2, h3 {
+    h1, h2, h3, h4 {
         color: #5c4033;
         font-weight: 600;
     }
@@ -26,11 +33,6 @@ st.markdown(
         background: rgba(255,255,255,0.9);
         border-radius: 10px;
         padding: 10px;
-    }
-    .stTabs [role="tablist"] {
-        background: rgba(255, 255, 255, 0.7);
-        border-radius: 10px;
-        padding: 5px;
     }
     #bakery-logo {
         position: absolute;
@@ -40,7 +42,6 @@ st.markdown(
         opacity: 0.9;
     }
     </style>
-
     <img id="bakery-logo" src="https://cdn-icons-png.flaticon.com/512/3075/3075977.png" alt="Bakery Logo">
     """,
     unsafe_allow_html=True,
@@ -53,7 +54,7 @@ st.title("🥖 Bakery Performance Dashboard")
 st.caption("Interactive insights comparing **Revenue** and **Profit** across multiple dimensions")
 
 # ---------------------------
-# Upload / Load Data
+# Upload Data
 # ---------------------------
 st.sidebar.header("📊 Data Upload")
 uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
@@ -62,35 +63,33 @@ if uploaded_file is None:
     st.sidebar.info("Please upload your dataset (with columns like Date, Channel, Service Type, Revenue, Ad Spend).")
     st.stop()
 
-# Load dataset
 if uploaded_file.name.endswith(".csv"):
     df = pd.read_csv(uploaded_file)
 else:
     df = pd.read_excel(uploaded_file)
 
 # ---------------------------
-# Detect important columns
+# Detect columns automatically
 # ---------------------------
 def detect_col(df, keywords):
     for col in df.columns:
         name = col.lower().strip()
-        if any(k.lower() in name for k in keywords):
+        if any(k in name for k in keywords):
             return col
     return None
 
 col_map = {
-    "date": detect_col(df, ["date", "day", "order"]),
+    "date": detect_col(df, ["date", "order"]),
     "channel": detect_col(df, ["channel", "platform", "marketing"]),
     "service": detect_col(df, ["service", "category", "product"]),
     "revenue": detect_col(df, ["revenue", "sales", "income"]),
     "ad_spend": detect_col(df, ["ad spend", "spend", "cost", "advertising"]),
-    "conversions": detect_col(df, ["conversion", "transactions", "orders"]),
-    "season": detect_col(df, ["season", "quarter", "period"]),
+    "season": detect_col(df, ["season", "quarter"]),
     "time_of_day": detect_col(df, ["time", "session"]),
 }
 
 # ---------------------------
-# Clean & prepare
+# Data prep
 # ---------------------------
 if col_map["date"]:
     df[col_map["date"]] = pd.to_datetime(df[col_map["date"]], errors="coerce")
@@ -99,40 +98,34 @@ if col_map["date"]:
 else:
     df["Month"], df["Day"] = np.nan, np.nan
 
-if col_map["revenue"] and col_map["ad_spend"]:
-    df["Profit"] = df[col_map["revenue"]] - df[col_map["ad_spend"]]
-else:
-    df["Profit"] = np.nan
-
-if col_map["revenue"] and col_map["ad_spend"]:
-    df["ROAS"] = df[col_map["revenue"]] / df[col_map["ad_spend"]].replace({0: np.nan})
+df["Profit"] = df[col_map["revenue"]] - df[col_map["ad_spend"]]
+df["ROAS"] = df[col_map["revenue"]] / df[col_map["ad_spend"]].replace({0: np.nan})
 
 # ---------------------------
 # Sidebar Filters
 # ---------------------------
 st.sidebar.header("🎛️ Filters")
 
-def multiselect_filter(df, column, label):
-    if column and column in df.columns:
-        vals = sorted(df[column].dropna().unique().tolist())
-        return st.sidebar.multiselect(label, vals, default=vals)
+def multi_filter(df, col, name):
+    if col and col in df.columns:
+        opts = sorted(df[col].dropna().unique().tolist())
+        return st.sidebar.multiselect(name, opts, default=opts)
     return []
 
-channels = multiselect_filter(df, col_map["channel"], "Channel")
-services = multiselect_filter(df, col_map["service"], "Service Type")
-seasons = multiselect_filter(df, col_map["season"], "Season")
-times = multiselect_filter(df, col_map["time_of_day"], "Time of Day")
-months = multiselect_filter(df, "Month", "Month")
-days = multiselect_filter(df, "Day", "Day")
+filters = {
+    "channel": multi_filter(df, col_map["channel"], "Channel"),
+    "service": multi_filter(df, col_map["service"], "Service Type"),
+    "season": multi_filter(df, col_map["season"], "Season"),
+    "time": multi_filter(df, col_map["time_of_day"], "Time of Day"),
+    "month": multi_filter(df, "Month", "Month"),
+    "day": multi_filter(df, "Day", "Day")
+}
 
-# Apply filters
 filtered = df.copy()
-if channels: filtered = filtered[filtered[col_map["channel"]].isin(channels)]
-if services: filtered = filtered[filtered[col_map["service"]].isin(services)]
-if seasons: filtered = filtered[filtered[col_map["season"]].isin(seasons)]
-if times: filtered = filtered[filtered[col_map["time_of_day"]].isin(times)]
-if months: filtered = filtered[filtered["Month"].isin(months)]
-if days: filtered = filtered[filtered["Day"].isin(days)]
+for key, vals in filters.items():
+    col = col_map.get(key) if key in col_map else key.capitalize()
+    if vals and col in filtered.columns:
+        filtered = filtered[filtered[col].isin(vals)]
 
 if filtered.empty:
     st.warning("⚠️ No data matches your filter selections.")
@@ -147,7 +140,7 @@ col2.metric("Total Profit", f"${filtered['Profit'].sum():,.2f}")
 col3.metric("Avg ROAS", f"{filtered['ROAS'].mean():.2f}")
 
 # ---------------------------
-# Tabs for Analysis
+# Tabs
 # ---------------------------
 tab1, tab2, tab3 = st.tabs(["📊 Channel & Service", "📈 Trends", "📉 Statistics"])
 
@@ -177,7 +170,7 @@ with tab1:
             compare_bar(grp, col_map["service"], "Revenue vs Profit by Service Type")
 
 with tab2:
-    st.markdown("### Time Series Trend (Monthly Revenue vs Profit)")
+    st.markdown("### Monthly Revenue vs Profit Trend")
     if col_map["date"]:
         df_month = filtered.set_index(col_map["date"]).resample("M").agg({
             col_map["revenue"]: "sum",
@@ -191,7 +184,7 @@ with tab3:
     st.markdown("### Descriptive Statistics")
     st.dataframe(filtered[[col_map["revenue"], "Profit", "ROAS"]].describe().T)
 
-    st.markdown("### Distribution of Profit & Revenue")
+    st.markdown("### Profit & Revenue Distribution")
     fig, ax = plt.subplots(1, 2, figsize=(10, 4))
     sns.histplot(filtered[col_map["revenue"]], kde=True, color="skyblue", ax=ax[0])
     ax[0].set_title("Revenue Distribution")
